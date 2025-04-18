@@ -1,5 +1,5 @@
-import React from "react"
-import OAuthButton from "src/components/OAuthButton";
+import React from "react";
+import OAuthButton from "./OAuthButton";
 
 export default function Home() {
   return (
