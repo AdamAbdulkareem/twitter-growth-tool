@@ -43,7 +43,6 @@ A lightweight, automated solution to help Twitter users grow their audience by t
 
   2. Install dependencies:
 > npm install
-Configure environment variables:
 
   3. Create a .env file in the root directory and add your Twitter API credentials:
 > TWITTER_API_KEY=your_api_key <br>
@@ -53,6 +52,6 @@ Configure environment variables:
 > MONGODB_URI=your_mongodb_uri
 <br>
 
-  4.Start the application:<br>
->npm run dev <be>
+  4. Start the application:<br>
+>npm run dev <br>
 >npm run start <br>
