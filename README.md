@@ -52,6 +52,6 @@ Configure environment variables:
 > TWITTER_ACCESS_SECRET=your_access_secret <br>
 > MONGODB_URI=your_mongodb_uri
 <br>
-  4.Start the application:
+  4.Start the application:<br>
 > npm run dev <br>
 > npm run start <br>
