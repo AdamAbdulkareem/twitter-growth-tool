@@ -46,10 +46,10 @@ A lightweight, automated solution to help Twitter users grow their audience by t
 Configure environment variables:
 
   3. Create a .env file in the root directory and add your Twitter API credentials:
-> TWITTER_API_KEY=your_api_key
-> TWITTER_API_SECRET=your_api_secret
-> TWITTER_ACCESS_TOKEN=your_access_token
-> TWITTER_ACCESS_SECRET=your_access_secret
+> TWITTER_API_KEY=your_api_key <br>
+> TWITTER_API_SECRET=your_api_secret <br>
+> TWITTER_ACCESS_TOKEN=your_access_token <br>
+> TWITTER_ACCESS_SECRET=your_access_secret <br>
 > MONGODB_URI=your_mongodb_uri
 
   4.Start the application:
