@@ -27,7 +27,6 @@ A lightweight, automated solution to help Twitter users grow their audience by t
 
 - Task Scheduling: Node-Cron
 
-**📸 Demo**
 
 <h2>🧑‍💻 Getting Started</h2>
 
@@ -36,3 +35,8 @@ A lightweight, automated solution to help Twitter users grow their audience by t
 - Node.js (v14 or higher)
 - MongoDB
 - Twitter Developer Account
+
+**Installation**
+> 1. Clone the repository:
+> git clone https://github.com/AdamAbdulkareem/twitter-growth-tool.git
+> cd twitter-growth-tool
