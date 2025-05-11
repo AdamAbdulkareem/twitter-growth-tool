@@ -38,7 +38,7 @@ A lightweight, automated solution to help Twitter users grow their audience by t
 
 **Installation**
   1. Clone the repository:
-> git clone https://github.com/AdamAbdulkareem/twitter-growth-tool.git
+> git clone https://github.com/AdamAbdulkareem/twitter-growth-tool.git <br>
 > cd twitter-growth-tool
 
   2. Install dependencies:
@@ -53,6 +53,6 @@ Configure environment variables:
 > MONGODB_URI=your_mongodb_uri
 <br>
 
-  4.Start the application:<be>
+  4.Start the application:<br>
 >npm run dev <be>
 >npm run start <br>
