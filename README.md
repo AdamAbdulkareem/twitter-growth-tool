@@ -30,6 +30,7 @@ A lightweight, automated solution to help Twitter users grow their audience by t
 **📸 Demo**
 
 <h2>🧑‍💻 Getting Started</h2>
+
 **Prerequisites**
 
 - Node.js (v14 or higher)
