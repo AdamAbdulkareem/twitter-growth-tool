@@ -1,4 +1,4 @@
-<h3>📈Twitter Growth Tool</h3>
+<h2>📈Twitter Growth Tool</h2>
 A lightweight, automated solution to help Twitter users grow their audience by tracking engagement, scheduling posts, and interacting with followers.
 
 
@@ -13,3 +13,25 @@ A lightweight, automated solution to help Twitter users grow their audience by t
 >- Analytics Dashboard: Visualize engagement metrics over time.
 
 >- User Whitelisting: Protect specific users from being unfollowed.
+
+
+
+**🛠️ Tech Stack**
+- Backend: Node.js, Express.js
+
+- Frontend: React.js
+
+- Database: MongoDB
+
+- Authentication: Twitter OAuth 2.0
+
+- Task Scheduling: Node-Cron
+
+**📸 Demo**
+
+<h2>🧑‍💻 Getting Started</h2>
+Prerequisites
+
+> - Node.js (v14 or higher)
+> - MongoDB
+> - Twitter Developer Account
