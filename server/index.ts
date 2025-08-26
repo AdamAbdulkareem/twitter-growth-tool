@@ -7,22 +7,44 @@ import dayjs from "dayjs";
 
 dotenv.config();
 
-// Initialize the Twitter client
+// Check if required env variables are present
+const TWITTER_CLIENT_ID = process.env.TWITTER_CLIENT_ID;
+const TWITTER_CLIENT_SECRET = process.env.TWITTER_CLIENT_SECRET;
+
+if (!TWITTER_CLIENT_ID || !TWITTER_CLIENT_SECRET) {
+  console.error(
+    "ERROR: Twitter client ID or secret is missing in environment variables!"
+  );
+  console.error(
+    "Please make sure TWITTER_CLIENT_ID and TWITTER_CLIENT_SECRET are defined in your .env file."
+  );
+  process.exit(1);
+}
+
+// Initialize the Twitter client with proper error handling
 const client = new TwitterApi({
-  clientId: process.env.TWITTER_CLIENT_ID!,
-  clientSecret: process.env.TWITTER_CLIENT_SECRET!,
+  clientId: TWITTER_CLIENT_ID,
+  clientSecret: TWITTER_CLIENT_SECRET,
 });
+
+console.log(
+  "Twitter API client initialized successfully with client ID:",
+  TWITTER_CLIENT_ID.substring(0, 5) + "..."
+);
 
 const app = express();
 const port = process.env.PORT || 5001;
 
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL,
+    origin: "http://localhost:3000",
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 app.use(cookieParser());
+app.use(express.json());
 
 // Step 1: Start OAuth flow
 app.get("/auth/twitter", async (req: Request, res: Response) => {
@@ -72,6 +94,28 @@ async function fetchUserDataAndAnalytics(loggedClient: TwitterApi) {
   };
 }
 
+// Define the Tweet interface for proper typing
+interface Tweet {
+  id: string;
+  text: string;
+  created_at: string;
+  public_metrics?: {
+    like_count?: number;
+    retweet_count?: number;
+    reply_count?: number;
+    quote_count?: number;
+    impression_count?: number;
+  };
+  edit_history_tweet_ids?: string[];
+}
+
+// Define a TwitterApiError interface for proper error handling
+type TwitterApiError = {
+  code?: number;
+  message?: string;
+  data?: unknown;
+};
+
 async function getTopTweets(
   loggedClient: TwitterApi,
   userId: string,
@@ -79,30 +123,83 @@ async function getTopTweets(
   count = 10
 ) {
   try {
-    const tweets = await loggedClient.v2.userTimeline(userId, {
-      max_results: 100,
-      "tweet.fields": ["public_metrics", "created_at"], // Ensure created_at is included
-      exclude: ["retweets", "replies"],
-    });
+    // Array to collect all tweets
+    let allTweets: Tweet[] = [];
+    let paginationToken: string | undefined = undefined;
 
-    // Check if we have tweets
-    if (!tweets.data || !tweets.data.data || tweets.data.data.length === 0) {
-      return [];
+    // Reduce the number of pages from 5 to 1 to avoid rate limits
+    const maxPages = 1;
+    let currentPage = 0;
+
+    // Get the date 1 year ago for filtering
+    const oneYearAgo = dayjs().subtract(365, "day");
+
+    // Use pagination to fetch tweets (limited to avoid rate limits)
+    while (currentPage < maxPages) {
+      try {
+        const tweets = await loggedClient.v2.userTimeline(userId, {
+          max_results: 100,
+          pagination_token: paginationToken,
+          "tweet.fields": ["public_metrics", "created_at"],
+          exclude: ["retweets", "replies"],
+        });
+
+        // Check if we have tweets in this page
+        if (
+          !tweets.data ||
+          !tweets.data.data ||
+          tweets.data.data.length === 0
+        ) {
+          break;
+        }
+
+        // Get tweet array from the paginated result
+        const tweetArray = Array.isArray(tweets.data)
+          ? tweets.data
+          : tweets.data.data;
+
+        // Sample log for debugging
+        if (currentPage === 0 && tweetArray.length > 0) {
+          console.log(
+            "Sample tweet structure:",
+            JSON.stringify(tweetArray[0], null, 2)
+          );
+        }
+
+        // Add tweets to our collection
+        allTweets = [...allTweets, ...(tweetArray as Tweet[])];
+
+        // Check if we have more pages
+        paginationToken = tweets.data.meta?.next_token;
+        if (!paginationToken) {
+          break; // No more pages
+        }
+
+        currentPage++;
+
+        // Add a delay between pagination requests to avoid rate limits (3 seconds)
+        if (currentPage < maxPages && paginationToken) {
+          console.log("Waiting 3 seconds before fetching next page...");
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+        }
+      } catch (error: unknown) {
+        // Check if it's a rate limit error
+        const apiError = error as TwitterApiError;
+        if (apiError && apiError.code === 429) {
+          console.log(
+            "Rate limit reached. Working with tweets already fetched."
+          );
+          break; // Stop trying to fetch more pages
+        } else {
+          // For other errors, propagate them
+          throw error;
+        }
+      }
     }
 
-    // Get tweet array from the paginated result
-    const tweetArray = Array.isArray(tweets.data)
-      ? tweets.data
-      : tweets.data.data;
+    console.log(`Total tweets fetched: ${allTweets.length}`);
 
-    if (tweetArray.length > 0) {
-      console.log(
-        "Sample tweet structure:",
-        JSON.stringify(tweetArray[0], null, 2)
-      );
-    }
-
-    // Define metric mapping with proper typing
+    // Define metric mapping with simple string keys
     const metricMap: Record<string, string> = {
       likes: "like_count",
       retweets: "retweet_count",
@@ -112,29 +209,30 @@ async function getTopTweets(
     };
 
     const sortField = metric in metricMap ? metricMap[metric] : "like_count";
+    console.log(`Sorting tweets by ${sortField}`);
 
-    // Calculate the date 30 days ago
-    const thirtyDaysAgo = dayjs().subtract(30, "day");
-
-    // Filter tweets created in the last 30 days
-    const recentTweets = tweetArray.filter((tweet) =>
-      dayjs(tweet.created_at).isAfter(thirtyDaysAgo)
+    // Filter tweets created in the last year
+    const recentTweets = allTweets.filter((tweet) =>
+      dayjs(tweet.created_at).isAfter(oneYearAgo)
     );
 
-    console.log(`Found ${recentTweets.length} tweets in the last 30 days`);
+    console.log(`Found ${recentTweets.length} tweets in the last year`);
 
-    // Sort the tweets
+    // Sort the tweets - use type assertion to handle the string indexing
     const sortedTweets = [...recentTweets].sort((a, b) => {
-      return (
-        (b.public_metrics?.[sortField] || 0) -
-        (a.public_metrics?.[sortField] || 0)
-      );
+      // Use optional chaining and nullish coalescing to safely access nested properties
+      const valueA =
+        a.public_metrics?.[sortField as keyof typeof a.public_metrics] || 0;
+      const valueB =
+        b.public_metrics?.[sortField as keyof typeof b.public_metrics] || 0;
+      return (valueB as number) - (valueA as number);
     });
 
     return sortedTweets.slice(0, count);
   } catch (error) {
     console.error("Error fetching top tweets:", error);
-    throw error;
+    // Return empty array on error instead of throwing
+    return [];
   }
 }
 
@@ -144,22 +242,16 @@ app.get("/auth/twitter/callback", async (req: Request, res: Response) => {
   const { code } = req.query;
 
   try {
-    console.log("Received code:", code);
-    console.log("Received codeVerifier:", codeVerifier);
-
     // Fetch user data from Twitter
     const {
-      client: loggedClient,
+      // client: loggedClient, // Removed unused variable
       accessToken,
-      refreshToken,
+      // refreshToken,        // Removed unused variable
     } = await client.loginWithOAuth2({
       code: code as string,
       codeVerifier,
       redirectUri: process.env.TWITTER_CALLBACK_URL!,
     });
-
-    console.log("Access Token:", accessToken);
-    console.log("Refresh Token:", refreshToken);
 
     // Save access token in cookies (for further API requests)
     res.cookie("access_token", accessToken, { httpOnly: true });
@@ -231,6 +323,200 @@ app.get(
     } catch (error) {
       console.error("Error fetching top tweets:", error);
       res.status(500).json({ error: "Error fetching top tweets" });
+    }
+  }
+);
+
+// Update the tweet endpoint
+app.post("/api/tweet", async (req: Request, res: Response): Promise<void> => {
+  console.log("Received tweet request:", req.body);
+  
+  const accessToken = req.cookies.access_token;
+
+  if (!accessToken) {
+    console.log("No access token found in cookies");
+    res.status(401).json({ error: "Unauthorized - No access token found" });
+    return;
+  }
+
+  const { text } = req.body;
+
+  if (!text || typeof text !== "string") {
+    console.log("Invalid tweet text:", text);
+    res.status(400).json({ error: "Invalid tweet text" });
+    return;
+  }
+
+  try {
+    console.log("Creating Twitter client with access token");
+    const loggedClient = new TwitterApi(accessToken);
+    
+    console.log("Attempting to post tweet with text:", text);
+    
+    const tweet = await loggedClient.v2.tweet(text);
+    
+    console.log("Tweet posted successfully:", tweet.data);
+    
+    res.json({ 
+      success: true, 
+      tweet: tweet.data 
+    });
+  } catch (error: any) {
+    console.error("Detailed error posting tweet:", {
+      message: error.message,
+      code: error.code,
+      data: error.data,
+      stack: error.stack
+    });
+
+    if (error.code === 401) {
+      res.status(401).json({ 
+        error: "Authentication failed. Please log in again.",
+        details: error.message
+      });
+    } else if (error.code === 403) {
+      res.status(403).json({ 
+        error: "Permission denied. Check your Twitter API permissions.",
+        details: error.message
+      });
+    } else if (error.code === 429) {
+      res.status(429).json({ 
+        error: "Rate limit exceeded. Please try again later.",
+        details: error.message
+      });
+    } else {
+      res.status(500).json({ 
+        error: "Error posting tweet",
+        details: error.message || "Unknown error occurred"
+      });
+    }
+  }
+});
+
+// Add this interface after the Tweet interface
+interface EngagementMetrics {
+  date: string;
+  likes: number;
+  retweets: number;
+  replies: number;
+  quotes: number;
+  impressions: number;
+}
+
+// Add this helper function before the app.get endpoints
+async function getHistoricalEngagement(
+  loggedClient: TwitterApi,
+  userId: string,
+  startDate: Date,
+  endDate: Date = new Date()
+) {
+  try {
+    let allTweets: Tweet[] = [];
+    let paginationToken: string | undefined = undefined;
+    const maxPages = 5; // Increased from 1 to get more historical data
+    let currentPage = 0;
+
+    while (currentPage < maxPages) {
+      try {
+        const tweets = await loggedClient.v2.userTimeline(userId, {
+          max_results: 100,
+          pagination_token: paginationToken,
+          "tweet.fields": ["public_metrics", "created_at"],
+          exclude: ["retweets", "replies"],
+          start_time: startDate.toISOString(),
+          end_time: endDate.toISOString(),
+        });
+
+        if (!tweets.data?.data || tweets.data.data.length === 0) {
+          break;
+        }
+
+        const tweetArray = Array.isArray(tweets.data) ? tweets.data : tweets.data.data;
+        allTweets = [...allTweets, ...(tweetArray as Tweet[])];
+
+        paginationToken = tweets.data.meta?.next_token;
+        if (!paginationToken) break;
+
+        currentPage++;
+        if (currentPage < maxPages && paginationToken) {
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+        }
+      } catch (error: unknown) {
+        const apiError = error as TwitterApiError;
+        if (apiError?.code === 429) {
+          console.log("Rate limit reached. Working with tweets already fetched.");
+          break;
+        }
+        throw error;
+      }
+    }
+
+    // Group tweets by month and aggregate metrics
+    const monthlyMetrics: Record<string, EngagementMetrics> = {};
+    
+    allTweets.forEach((tweet) => {
+      const date = new Date(tweet.created_at);
+      const monthKey = date.toISOString().slice(0, 7); // YYYY-MM format
+      
+      if (!monthlyMetrics[monthKey]) {
+        monthlyMetrics[monthKey] = {
+          date: monthKey,
+          likes: 0,
+          retweets: 0,
+          replies: 0,
+          quotes: 0,
+          impressions: 0,
+        };
+      }
+
+      const metrics = tweet.public_metrics || {};
+      monthlyMetrics[monthKey].likes += metrics.like_count || 0;
+      monthlyMetrics[monthKey].retweets += metrics.retweet_count || 0;
+      monthlyMetrics[monthKey].replies += metrics.reply_count || 0;
+      monthlyMetrics[monthKey].quotes += metrics.quote_count || 0;
+      monthlyMetrics[monthKey].impressions += metrics.impression_count || 0;
+    });
+
+    // Convert to array and sort by date
+    return Object.values(monthlyMetrics).sort((a, b) => a.date.localeCompare(b.date));
+  } catch (error) {
+    console.error("Error fetching historical engagement:", error);
+    return [];
+  }
+}
+
+// Add this new endpoint after the existing endpoints
+app.get(
+  "/api/historical-engagement",
+  async (req: Request, res: Response): Promise<void> => {
+    const accessToken = req.cookies.access_token;
+
+    if (!accessToken) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    try {
+      const { userId, startDate } = req.query;
+
+      if (!userId) {
+        res.status(400).json({ error: "Missing required parameter: userId" });
+        return;
+      }
+
+      const loggedClient = new TwitterApi(accessToken);
+      const start = startDate ? new Date(startDate as string) : new Date(new Date().setFullYear(new Date().getFullYear() - 1));
+
+      const historicalData = await getHistoricalEngagement(
+        loggedClient,
+        userId as string,
+        start
+      );
+
+      res.json({ engagement: historicalData });
+    } catch (error) {
+      console.error("Error fetching historical engagement:", error);
+      res.status(500).json({ error: "Error fetching historical engagement data" });
     }
   }
 );
