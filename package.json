@@ -16,7 +16,7 @@
     "dayjs": "^1.11.13",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
-    "next": "latest",
+    "next": "^14.2.5",
     "oauth4webapi": "^3.3.0",
     "react": "latest",
     "react-dom": "latest",
